@@ -9,13 +9,14 @@ import "github.com/go-gl/glfw"
 var drawing int
 
 var (
-	running          bool = true
-	m                *Map
-	brushValue       int        = 188
-	currentBrushSize int        = 0
-	brushSizes       []int      = []int{24, 32, 48, 64, 128}
-	cursorVerts      []float64  = buildCursor(brushSizes[currentBrushSize])
-	camera           [2]float32 = [2]float32{0, 0}
+	running           bool = true
+	m                 *Map
+	currentBrushValue int        = 0
+	currentBrushSize  int        = 0
+	brushValues       []int      = []int{145, 170, 195, 245}
+	brushSizes        []int      = []int{24, 32, 48, 64, 128}
+	cursorVerts       []float64  = buildCursor(brushSizes[currentBrushSize])
+	camera            [2]float32 = [2]float32{0, 0}
 )
 
 func main() {
@@ -118,13 +119,13 @@ func handleKeyDown(key, state int) {
 
 	switch key {
 	case '1':
-		brushValue = 145
+		currentBrushValue = 0
 	case '2':
-		brushValue = 170
+		currentBrushValue = 1
 	case '3':
-		brushValue = 195
+		currentBrushValue = 2
 	case '4':
-		brushValue = 245
+		currentBrushValue = 3
 	case '[':
 		currentBrushSize--
 		if currentBrushSize < 0 {
@@ -149,9 +150,9 @@ func handleKeyDown(key, state int) {
 func handleMouseButton(button, state int) {
 	switch {
 	case button == 0 && state == 1:
-		drawing = brushValue
+		drawing = brushValues[currentBrushValue]
 	case button == 1 && state == 1:
-		drawing = 40
+		drawing = 1
 	default:
 		drawing = 0
 	}
