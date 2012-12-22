@@ -118,13 +118,13 @@ func handleKeyDown(key, state int) {
 
 	switch key {
 	case '1':
-		brushValue = 130
+		brushValue = 145
 	case '2':
-		brushValue = 155
+		brushValue = 170
 	case '3':
-		brushValue = 175
+		brushValue = 195
 	case '4':
-		brushValue = 205
+		brushValue = 245
 	case '[':
 		currentBrushSize--
 		if currentBrushSize < 0 {
