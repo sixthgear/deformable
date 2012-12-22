@@ -1,6 +1,6 @@
 package main
 
-// import "fmt"
+import "fmt"
 import "math"
 import "github.com/sixthgear/noise"
 import "github.com/go-gl/gl"
@@ -180,6 +180,10 @@ func (m *Map) GenerateIsoband(min, max int, color [3]float32) *VertexList {
 				count += uint(num)
 			}
 		}
+	}
+
+	for i := 0; i < len(vl.vertices); i += 2 {
+		fmt.Printf("%d: %.2f %.2f \n", i/2, vl.vertices[i], vl.vertices[i+1])
 	}
 
 	return vl
