@@ -11,19 +11,15 @@ type Vertex struct {
 	x, y float32
 }
 
-type Line struct {
-	a, b Vertex
-}
-
 type Map struct {
 	width, height int
+	renderMode    int
+	renderSmooth  bool
 	gridSize      int
-	contourLevel  int
 	grid          []int
 	contour       []int
 	gridLines     []float32
-	vl            *VertexList
-	vl2           *VertexList
+	vl            []*VertexList
 }
 
 type VertexList struct {
@@ -39,9 +35,6 @@ func GenerateMap(width, height int, gridSize int) *Map {
 	m.width = width
 	m.height = height
 	m.gridSize = gridSize
-	m.contourLevel = 128
-	// m.vl = new(VertexList)
-
 	m.grid = make([]int, width*height)
 
 	diag := math.Hypot(float64(m.width/2), float64(m.height/2))
@@ -53,7 +46,7 @@ func GenerateMap(width, height int, gridSize int) *Map {
 			// calculate inverse distance from center
 			d := 1.0 - math.Hypot(float64(m.width/2)-fx, float64(m.height/2)-fy)/diag
 			d = d
-			v := noise.OctaveNoise2d(fx, fy, 4, 1, 1.0/128)
+			v := noise.OctaveNoise2d(fx, fy, 4, 0.5, 1.0/64)
 			v = (v + 1.0) / 2
 			v = v * 256
 			m.grid[y*width+x] = int(v)
@@ -62,9 +55,7 @@ func GenerateMap(width, height int, gridSize int) *Map {
 		m.gridLines = append(m.gridLines, 0, float32(y*m.gridSize), float32((m.width-1)*m.gridSize), float32(y*m.gridSize))
 	}
 
-	m.vl = m.GenerateIsoband(m.contourLevel, m.contourLevel+64)
-	m.vl2 = m.GenerateIsoband(m.contourLevel+64, math.MaxInt32)
-
+	m.RebuildVertices()
 	return m
 }
 
@@ -73,11 +64,21 @@ func lerp(a, b, t float32) float32 {
 	return v
 }
 
-func (m *Map) GenerateIsoband(min, max int) *VertexList {
+func (m *Map) RebuildVertices() {
+	m.vl = make([]*VertexList, 4)
+	m.vl[0] = m.GenerateIsoband(125, 150, [3]float32{1.0, 1.0, 1.0})
+	m.vl[1] = m.GenerateIsoband(150, 175, [3]float32{0.8, 0.8, 0.8})
+	m.vl[2] = m.GenerateIsoband(175, 200, [3]float32{0.625, 0.625, 0.625})
+	m.vl[3] = m.GenerateIsoband(200, math.MaxInt32, [3]float32{0.5, 0.5, 0.5})
+}
+
+func (m *Map) GenerateIsoband(min, max int, color [3]float32) *VertexList {
 
 	vl := new(VertexList)
+
 	vl.vertices = make([]float32, 0)
 	vl.indices = make([]uint, 0)
+	vl.colors = append(vl.colors, color[0], color[1], color[2])
 	threshold := make([]int, len(m.grid))
 	count := uint(0)
 
@@ -96,23 +97,15 @@ func (m *Map) GenerateIsoband(min, max int) *VertexList {
 		for x := 0; x < m.width-1; x++ {
 
 			polygon := make([]Vertex, 0)
-
-			var corners [5][2]int = [...][2]int{
-				{0, 0},
-				{1, 0},
-				{1, 1},
-				{0, 1},
-				{0, 0},
-			}
+			corners := [5][2]int{{0, 0}, {1, 0}, {1, 1}, {0, 1}, {0, 0}}
 
 			for i := 0; i < 4; i++ {
 
+				var lerpTarget *float32
 				x1, y1 := x+corners[i][0], y+corners[i][1]
 				x2, y2 := x+corners[i+1][0], y+corners[i+1][1]
 				edge := Vertex{float32(x1 * m.gridSize), float32(y1 * m.gridSize)}
 				corner := Vertex{float32(x2 * m.gridSize), float32(y2 * m.gridSize)}
-
-				var lerpTarget *float32
 
 				switch i % 2 {
 				case 0:
@@ -166,11 +159,9 @@ func (m *Map) GenerateIsoband(min, max int) *VertexList {
 					// solid
 					polygon = append(polygon, corner) // add corner					
 				default:
-					// 0, 8
+					// blank, do nothing
 				}
-				// fmt.Printf("%d ", t1*3+t2)
 			}
-			// fmt.Printf(" - %d\n", len(polygon))
 
 			// Build manual triangle fan
 			num := len(polygon)
@@ -179,7 +170,7 @@ func (m *Map) GenerateIsoband(min, max int) *VertexList {
 				for i := range polygon {
 					vl.vertices = append(vl.vertices, polygon[i].x, polygon[i].y)
 				}
-				// fmt.Println(polygon)
+
 				for i := 2; i < num; i++ {
 					vl.indices = append(vl.indices, count)
 					vl.indices = append(vl.indices, count+uint(i)-1)
@@ -188,10 +179,6 @@ func (m *Map) GenerateIsoband(min, max int) *VertexList {
 
 				count += uint(num)
 			}
-
-			// m.vl.indices = append(m.vl.indices, PRIMITIVE_RESTART)
-			// fmt.Println(count)
-
 		}
 	}
 
@@ -199,63 +186,70 @@ func (m *Map) GenerateIsoband(min, max int) *VertexList {
 
 }
 
-func (m *Map) Add(x, y, val int, radius float64) {
+func (m *Map) Add(x, y, val, radius int) {
 
 	xi := (x - m.gridSize/2) / m.gridSize
 	yi := (y - m.gridSize/2) / m.gridSize
+	ri := radius / m.gridSize
 
-	ri := int(math.Ceil(radius / float64(m.gridSize)))
+	for y := -ri; y <= ri; y++ {
+		for x := -ri; x <= ri; x++ {
 
-	for i := yi - ri; i <= yi+ri; i++ {
-		for j := xi - ri; j <= xi+ri; j++ {
-			d := 1.0 - math.Hypot(float64(yi-i), float64(xi-j))/radius
-			v := int(d * d * d * float64(val))
-			m.grid[i*m.width+j] += v
-			m.grid[i*m.width+j] = int(math.Max(0, math.Min(512, float64(m.grid[i*m.width+j]))))
+			i := (yi+y)*m.width + (xi + x)
+			if xi+x < 0 || xi+x >= m.width || yi+y < 0 || yi+y >= m.height {
+				continue
+			}
+
+			a := float64(m.grid[i])
+			b := float64(val)
+			d := 1.0 - math.Hypot(float64(x), float64(y))/(float64(ri)*math.Sqrt2)
+			d *= 0.25
+
+			m.grid[i] = int(a + (b-a)*d)
+			m.grid[i] = int(math.Max(0, float64(m.grid[i])))
+			m.grid[i] = int(math.Min(512, float64(m.grid[i])))
 		}
 	}
 
-	m.vl = m.GenerateIsoband(m.contourLevel, m.contourLevel+64)
-	m.vl2 = m.GenerateIsoband(m.contourLevel+64, math.MaxInt32)
+	m.RebuildVertices()
 }
 
 func (m *Map) Draw() {
-	gl.PushMatrix()
-	gl.PushAttrib(gl.CURRENT_BIT | gl.ENABLE_BIT | gl.LIGHTING_BIT | gl.POLYGON_BIT | gl.LINE_BIT)
 
-	// gl.EnableClientState(gl.NORMAL_ARRAY)
-	// gl.NormalPointer(gl.FLOAT, 0, m.normals)
-
-	// gl.EnableClientState(gl.TEXTURE_COORD_ARRAY)
-	// gl.TexCoordPointer(2, gl.FLOAT, 0, m.texcoords)
-
-	// gl.EnableClientState(gl.COLOR_ARRAY)
-	// gl.ColorPointer(3, gl.FLOAT, 0, m.colors)
-
-	// draw solids
-	// gl.Enable(gl.COLOR_MATERIAL)
+	// gl.Enable(gl.PRIMITIVE_RESTART)
+	// gl.PrimitiveRestartIndex(PRIMITIVE_RESTART)
+	gl.EnableClientState(gl.VERTEX_ARRAY)
 	gl.Translatef(float32(m.gridSize/2), float32(m.gridSize/2), 0)
 
-	gl.EnableClientState(gl.VERTEX_ARRAY)
-
-	gl.VertexPointer(2, gl.FLOAT, 0, m.gridLines)
-	gl.Color3f(0.2, 0.2, 0.2)
-	gl.LineWidth(1)
-	gl.DrawArrays(gl.LINES, 0, len(m.gridLines)/2)
-
-	gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
-
-	if len(m.vl.vertices) > 0 {
-		gl.VertexPointer(2, gl.FLOAT, 0, m.vl.vertices)
-		gl.Color3f(1, 1, 1)
-		gl.DrawElements(gl.TRIANGLES, len(m.vl.indices), gl.UNSIGNED_INT, m.vl.indices)
-	}
-	if len(m.vl2.vertices) > 0 {
-		gl.VertexPointer(2, gl.FLOAT, 0, m.vl2.vertices)
-		gl.Color3f(0.5, 0.5, 0.5)
-		gl.DrawElements(gl.TRIANGLES, len(m.vl2.indices), gl.UNSIGNED_INT, m.vl2.indices)
+	if m.renderSmooth {
+		gl.Enable(gl.BLEND)
+		gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+		gl.Enable(gl.POLYGON_SMOOTH)
+		gl.Hint(gl.POLYGON_SMOOTH_HINT, gl.NICEST)
 	}
 
-	gl.PopAttrib()
-	gl.PopMatrix()
+	if m.renderMode == 1 {
+		gl.LineWidth(1)
+		gl.VertexPointer(2, gl.FLOAT, 0, m.gridLines)
+		gl.Color3f(0.2, 0.2, 0.2)
+		gl.DrawArrays(gl.LINES, 0, len(m.gridLines)/2)
+		gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE)
+	}
+
+	for _, vl := range m.vl {
+		if len(vl.vertices) > 0 {
+			gl.VertexPointer(2, gl.FLOAT, 0, vl.vertices)
+			gl.Color3f(vl.colors[0], vl.colors[1], vl.colors[2])
+			gl.DrawElements(gl.TRIANGLES, len(vl.indices), gl.UNSIGNED_INT, vl.indices)
+		}
+	}
+
 }
+
+// gl.EnableClientState(gl.NORMAL_ARRAY)
+// gl.NormalPointer(gl.FLOAT, 0, m.normals)
+// gl.EnableClientState(gl.TEXTURE_COORD_ARRAY)
+// gl.TexCoordPointer(2, gl.FLOAT, 0, m.texcoords)
+// gl.EnableClientState(gl.COLOR_ARRAY)
+// gl.ColorPointer(3, gl.FLOAT, 0, m.colors)
+// gl.Enable(gl.COLOR_MATERIAL)
