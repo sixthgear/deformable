@@ -1,6 +1,5 @@
 package main
 
-import "fmt"
 import "math"
 import "github.com/sixthgear/noise"
 import "github.com/go-gl/gl"
@@ -24,7 +23,7 @@ type Map struct {
 
 type VertexList struct {
 	vertices []float32
-	indices  []uint
+	indices  []uint32
 	colors   []float32
 }
 
@@ -77,10 +76,10 @@ func (m *Map) GenerateIsoband(min, max int, color [3]float32) *VertexList {
 	vl := new(VertexList)
 
 	vl.vertices = make([]float32, 0)
-	vl.indices = make([]uint, 0)
+	vl.indices = make([]uint32, 0)
 	vl.colors = append(vl.colors, color[0], color[1], color[2])
 	threshold := make([]int, len(m.grid))
-	count := uint(0)
+	count := uint32(0)
 
 	for i, v := range m.grid {
 		switch {
@@ -130,15 +129,15 @@ func (m *Map) GenerateIsoband(min, max int, color [3]float32) *VertexList {
 					// corner in max
 					*lerpTarget += lerp(a, b, float32(max)) * factor
 					polygon = append(polygon, edge)   // add lerp edge
-					polygon = append(polygon, corner) // add corner					
+					polygon = append(polygon, corner) // add corner
 				case 3:
 					// corner out min
 					*lerpTarget += lerp(a, b, float32(min)) * factor
-					polygon = append(polygon, edge) // // add lerp edge					
+					polygon = append(polygon, edge) // // add lerp edge
 				case 5:
-					// corner out max			
+					// corner out max
 					*lerpTarget += lerp(a, b, float32(max)) * factor
-					polygon = append(polygon, edge) // // add lerp edge										
+					polygon = append(polygon, edge) // // add lerp edge
 				case 2:
 					// double edge min -> max
 					old := *lerpTarget
@@ -146,7 +145,7 @@ func (m *Map) GenerateIsoband(min, max int, color [3]float32) *VertexList {
 					polygon = append(polygon, edge) // // add lerp edge
 					*lerpTarget = old
 					*lerpTarget += lerp(a, b, float32(max)) * factor
-					polygon = append(polygon, edge) // // add lerp edge										
+					polygon = append(polygon, edge) // // add lerp edge
 				case 6:
 					// double edge max -> min
 					old := *lerpTarget
@@ -154,10 +153,10 @@ func (m *Map) GenerateIsoband(min, max int, color [3]float32) *VertexList {
 					polygon = append(polygon, edge) // add lerp edge
 					*lerpTarget = old
 					*lerpTarget += lerp(a, b, float32(min)) * factor
-					polygon = append(polygon, edge) // add edge					
+					polygon = append(polygon, edge) // add edge
 				case 4:
 					// solid
-					polygon = append(polygon, corner) // add corner					
+					polygon = append(polygon, corner) // add corner
 				default:
 					// blank, do nothing
 				}
@@ -173,17 +172,13 @@ func (m *Map) GenerateIsoband(min, max int, color [3]float32) *VertexList {
 
 				for i := 2; i < num; i++ {
 					vl.indices = append(vl.indices, count)
-					vl.indices = append(vl.indices, count+uint(i)-1)
-					vl.indices = append(vl.indices, count+uint(i))
+					vl.indices = append(vl.indices, count+uint32(i)-1)
+					vl.indices = append(vl.indices, count+uint32(i))
 				}
 
-				count += uint(num)
+				count += uint32(num)
 			}
 		}
-	}
-
-	for i := 0; i < len(vl.vertices); i += 2 {
-		fmt.Printf("%d: %.2f %.2f \n", i/2, vl.vertices[i], vl.vertices[i+1])
 	}
 
 	return vl
