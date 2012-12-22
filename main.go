@@ -141,7 +141,7 @@ func handleKeyDown(key, state int) {
 		running = false
 	case glfw.KeyTab:
 		m.renderMode = (m.renderMode + 1) % 2
-	case 'S':
+	case '\\':
 		m.renderSmooth = !m.renderSmooth
 	}
 }
