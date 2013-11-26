@@ -1,10 +1,12 @@
 package main
 
-// import "fmt"
-import "math"
-import "log"
-import "github.com/go-gl/gl"
-import "github.com/go-gl/glfw"
+import (
+	"log"
+	"math"
+
+	"github.com/go-gl/gl"
+	glfw "github.com/go-gl/glfw3"
+)
 
 var drawing int
 
@@ -21,44 +23,33 @@ var (
 
 func main() {
 
-	if err := glfw.Init(); err != nil {
+	if !glfw.Init() {
+		log.Fatal("glfw failed to initialize")
+	}
+	defer glfw.Terminate()
+
+	window, err := glfw.CreateWindow(640, 480, "Deformable", nil, nil)
+	if err != nil {
 		log.Fatal(err.Error())
 	}
 
-	if err := glfw.OpenWindow(800, 600, 8, 8, 8, 8, 8, 0, glfw.Windowed); err != nil {
-		glfw.Terminate()
-		log.Fatal(err.Error())
-	}
+	window.MakeContextCurrent()
+	glfw.SwapInterval(1)
+	window.SetMouseButtonCallback(handleMouseButton)
+	window.SetKeyCallback(handleKeyDown)
+	window.SetInputMode(glfw.Cursor, glfw.CursorHidden)
 
-	glfw.SetWindowTitle("Deformable")
-	glfw.SetSwapInterval(1)
-	glfw.SetMouseButtonCallback(handleMouseButton)
-	glfw.SetKeyCallback(handleKeyDown)
-	glfw.Disable(glfw.MouseCursor)
-
+	gl.Init()
 	initGL()
 
 	i := 16
 	m = GenerateMap(1600/i, 1200/i, i)
-	for running && glfw.WindowParam(glfw.Opened) == 1 {
+	for running && !window.ShouldClose() {
 
-		x, y := glfw.MousePos()
+		x, y := window.GetCursorPosition()
 
 		if drawing != 0 {
-			m.Add(x+int(camera[0]), y+int(camera[1]), drawing, brushSizes[currentBrushSize])
-		}
-
-		switch 1 {
-		case glfw.Key(glfw.KeyLeft), glfw.Key('A'):
-			camera[0] -= 8
-		case glfw.Key(glfw.KeyRight), glfw.Key('D'):
-			camera[0] += 8
-		}
-		switch 1 {
-		case glfw.Key(glfw.KeyUp), glfw.Key('W'):
-			camera[1] -= 8
-		case glfw.Key(glfw.KeyDown), glfw.Key('S'):
-			camera[1] += 8
+			m.Add(int(x)+int(camera[0]), int(y)+int(camera[1]), drawing, brushSizes[currentBrushSize])
 		}
 
 		gl.Clear(gl.COLOR_BUFFER_BIT)
@@ -85,10 +76,9 @@ func main() {
 		gl.DrawArrays(gl.LINE_LOOP, 0, 24)
 		gl.PopAttrib()
 
-		glfw.SwapBuffers()
+		window.SwapBuffers()
+		glfw.PollEvents()
 	}
-
-	glfw.Terminate()
 
 }
 
@@ -111,13 +101,22 @@ func buildCursor(size int) []float64 {
 	}
 	return vl
 }
-func handleKeyDown(key, state int) {
 
-	if state == 0 {
+func handleKeyDown(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
+
+	if action == glfw.Release {
 		return
 	}
 
 	switch key {
+	case glfw.KeyLeft, glfw.KeyA:
+		camera[0] -= 8
+	case glfw.KeyRight, glfw.KeyD:
+		camera[0] += 8
+	case glfw.KeyUp, glfw.KeyW:
+		camera[1] -= 8
+	case glfw.KeyDown, glfw.KeyS:
+		camera[1] += 8
 	case '1':
 		currentBrushValue = 0
 	case '2':
@@ -138,7 +137,7 @@ func handleKeyDown(key, state int) {
 			currentBrushSize = len(brushSizes) - 1
 		}
 		cursorVerts = buildCursor(brushSizes[currentBrushSize])
-	case glfw.KeyEsc:
+	case glfw.KeyEscape:
 		running = false
 	case glfw.KeyTab:
 		m.renderMode = (m.renderMode + 1) % 2
@@ -147,11 +146,11 @@ func handleKeyDown(key, state int) {
 	}
 }
 
-func handleMouseButton(button, state int) {
+func handleMouseButton(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mods glfw.ModifierKey) {
 	switch {
-	case button == 0 && state == 1:
+	case button == 0 && action == glfw.Press:
 		drawing = brushValues[currentBrushValue]
-	case button == 1 && state == 1:
+	case button == 1 && action == glfw.Press:
 		drawing = 1
 	default:
 		drawing = 0
